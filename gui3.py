@@ -4,8 +4,8 @@ import sqlite3
 import webbrowser
 import urllib.parse
 import re
-from PIL import Image, ImageEnhance, ImageFilter
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QFileDialog, QLabel, QVBoxLayout,
+from PIL import Image, ImageEnhance
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QFileDialog, QVBoxLayout,
                              QPushButton, QWidget, QTableWidget, QTableWidgetItem,
                              QHBoxLayout, QLineEdit, QDialog, QFormLayout, QDialogButtonBox, QMessageBox)
 from PyQt5.QtCore import Qt
@@ -17,9 +17,9 @@ import numpy as np
 #====STYLE SHEET====#
 
 # JetBrains Mono font setup
-jetbrains_font = QFont("JetBrains Mono", 10)
-if jetbrains_font.family() != "JetBrains Mono":
-    jetbrains_font = QFont("Monospace", 10)
+jetbrains_font = QFont("JetBrainsMono Nerd Font Mono", 8)
+if jetbrains_font.family() != "JetBrainsMono Nerd Font Mono":
+    jetbrains_font = QFont("Monospace", 8)
 
 # Dark theme stylesheet
 dark_stylesheet = """
@@ -592,12 +592,15 @@ class ChemicalEntryDialog(QDialog):
         self.setLayout(layout)
 
     def open_google_search(self):
-            manufacturer = self.manufacturer_edit.text().strip()
-            catalog_number = self.catalog_number_edit.text().strip()
-            if manufacturer and catalog_number:
-                query = f"{manufacturer} {catalog_number}"
-                url = f"https://www.google.com/search?q={urllib.parse.quote(query)}"
-                webbrowser.open(url)
+        manufacturer = self.manufacturer_edit.text().strip()
+        catalog_number = self.catalog_number_edit.text().strip()
+        print(f"Manufacturer: {manufacturer}, Catalog Number: {catalog_number}")  # Debug
+        if manufacturer and catalog_number:
+            query = f"{manufacturer} {catalog_number}"
+            url = f"https://www.google.com/search?q={urllib.parse.quote(query)}"
+            webbrowser.open(url)
+        else:
+            QMessageBox.warning(self, "Missing Info", "Please enter both manufacturer and catalog number.")
 
     def get_data(self):
         return {
@@ -614,45 +617,89 @@ class ChemicalEntryDialog(QDialog):
             "safety_info_url": None
         }
 
-def normalize_name(name):
-    return name.strip().lower() if name else ""
+def normalize(s):
+    return s.strip().lower() if s else None
 
-# Inserts a new chemical into the database
 def save_to_database(info):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
 
-    # Normalize the names for comparison
-    name = normalize_name(info.get("name"))
-    common_name = normalize_name(info.get("common_name"))
-    iupac_name = normalize_name(info.get("iupac_name"))
+    # Normalize incoming values
+    name = normalize(info.get("name"))
+    common_name = normalize(info.get("common_name"))
+    cas_number = normalize(info.get("cas_number"))
+    catalog_number = normalize(info.get("catalog_number"))
 
-    # Check if an entry with the same name already exists
-    cursor.execute('''
-        SELECT id, quantity FROM Chemicals
-        WHERE LOWER(name) = ? OR LOWER(common_name) = ? OR LOWER(iupac_name) = ?
-    ''', (name, common_name, iupac_name))
+    existing = None
 
-    existing = cursor.fetchone()
+    # Priority 1: Match by CAS number
+    if cas_number:
+        cursor.execute('''
+            SELECT id, quantity FROM Chemicals
+            WHERE LOWER(cas_number) = ?
+        ''', (cas_number,))
+        existing = cursor.fetchone()
 
+    # Priority 2: Match by catalog number
+    if not existing and catalog_number:
+        cursor.execute('''
+            SELECT id, quantity FROM Chemicals
+            WHERE LOWER(catalog_number) = ?
+        ''', (catalog_number,))
+        existing = cursor.fetchone()
+
+    # Priority 3: Match name when common_name is empty
+    if not existing and name:
+        cursor.execute('''
+            SELECT id, quantity FROM Chemicals
+            WHERE LOWER(name) = ?
+            AND (common_name IS NULL OR TRIM(common_name) = '')
+        ''', (name,))
+        existing = cursor.fetchone()
+
+    # Priority 4: Match common_name when name is empty
+    if not existing and common_name:
+        cursor.execute('''
+            SELECT id, quantity FROM Chemicals
+            WHERE LOWER(common_name) = ?
+            AND (name IS NULL OR TRIM(name) = '')
+        ''', (common_name,))
+        existing = cursor.fetchone()
+
+    # Priority 5: common_name matches existing name, and their common_name is empty
+    if not existing and common_name:
+        cursor.execute('''
+            SELECT id, quantity FROM Chemicals
+            WHERE LOWER(name) = ?
+            AND (common_name IS NULL OR TRIM(common_name) = '')
+        ''', (common_name,))
+        existing = cursor.fetchone()
+
+    # Priority 6: name matches existing common_name, and their name is empty
+    if not existing and name:
+        cursor.execute('''
+            SELECT id, quantity FROM Chemicals
+            WHERE LOWER(common_name) = ?
+            AND (name IS NULL OR TRIM(name) = '')
+        ''', (name,))
+        existing = cursor.fetchone()
+
+    # Merge if match found
     if existing:
         existing_id, existing_qty = existing
         new_qty = existing_qty + info.get("quantity", 1)
-
-        # Update only the quantity for the existing compound
         cursor.execute('''
             UPDATE Chemicals
             SET quantity = ?
             WHERE id = ?
         ''', (new_qty, existing_id))
     else:
-        # Insert new entry, using original (non-normalized) info
+        # Insert new row
         cursor.execute('''
             INSERT INTO Chemicals (
                 name, cas_number, formula, common_name, iupac_name, location, quantity,
                 safety_info_url, manufacturer, catalog_number, product_url
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             info.get("name"),
             info.get("cas_number"),
@@ -669,7 +716,6 @@ def save_to_database(info):
 
     conn.commit()
     conn.close()
-
 def process_image_file(image_path):
     print(f"Processing: {image_path}")
     text = extract_text_from_image(image_path)
