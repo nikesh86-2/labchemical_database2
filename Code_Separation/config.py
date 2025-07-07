@@ -1,0 +1,1 @@
+DB_FILE = "chemicals.db"

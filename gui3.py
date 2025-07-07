@@ -5,12 +5,13 @@ import webbrowser
 import urllib.parse
 import re
 from PIL import Image, ImageEnhance
+import easyocr
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QFileDialog, QVBoxLayout,
                              QPushButton, QWidget, QTableWidget, QTableWidgetItem,
                              QHBoxLayout, QLabel, QLineEdit, QDialog, QFormLayout, QDialogButtonBox, QMessageBox)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QPixmap
-import easyocr
+
 import pubchempy as pcp
 import numpy as np
 
@@ -199,21 +200,6 @@ def parse_chemical_info(text):
     if cas_match:
         data["cas_number"] = cas_match.group(1)
 
-    # # Try to find formula-like strings (e.g., C6H12O6)
-    # formula_match = re.search(r'\b([A-Z][a-z]?[0-9]{0,3})+\b', text)
-    # if formula_match:
-    #     data["formula"] = formula_match.group(0)
-    #
-    # # Try to find a chemical name (best guess: longest capitalized word)
-    # potential_names = re.findall(r'\b[A-Z][a-zA-Z0-9\-]{2,}\b', text)
-    # if potential_names:
-    #     data["name"] = max(potential_names, key=len)
-    #
-    # # Manufacturer
-    # manufacturer_match = re.search(r"Manufacturer[:\s]*([\w\s&,-]+)", text, re.IGNORECASE)
-    # if manufacturer_match:
-    #     data["manufacturer"] = manufacturer_match.group(1).strip()
-    #
     # Catalog Number
     catalog_match = re.search(
         r"\b(?:Catalog|Catalogue|Cat(?:\.|alog(?:ue)?)?)?\s*(?:No\.?|Number)?\s*[:#]?\s*([A-Z]?\d{4,}[A-Z]?)\b",
@@ -569,31 +555,6 @@ class MainWindow(QMainWindow):
                 else:
                     item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable)
         self.table.blockSignals(False)
-
-#     def load_data(self):
-# #reload data in visible spreadsheet
-#         self.table.blockSignals(True) # prevent recursive triggers when inline editing
-#         conn = sqlite3.connect(DB_FILE)
-#         cursor = conn.cursor()
-#         cursor.execute("SELECT id, name, cas_number, formula, common_name, iupac_name, location, quantity, safety_info_url, manufacturer, catalog_number FROM Chemicals")
-#         rows = cursor.fetchall()
-#         conn.close()
-#
-#         headers = ["ID", "Name", "CAS Number", "Formula", "Common Name", "IUPAC Name", "Location", "Quantity", "Safety Info URL", "Manufacturer", "Catalog Number"]
-#         self.table.clear()
-#         self.table.setRowCount(len(rows))
-#         self.table.setColumnCount(len(headers))
-#         self.table.setHorizontalHeaderLabels(headers)
-#
-#         for row_idx, row_data in enumerate(rows):
-#             for col_idx, value in enumerate(row_data):
-#                 item = QTableWidgetItem(str(value))
-#                 self.table.setItem(row_idx, col_idx, item)
-#                 if col_idx == 0:
-#                     item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)  # ID is read-only
-#                 else:
-#                     item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable)
-#         self.table.blockSignals(False) # prevent recursive triggers when inline editing
 
 #====INLINE CHEMICAL EDITING ====#
     def handle_cell_change(self, item):
