@@ -5,6 +5,7 @@ from styles import jetbrains_font
 import webbrowser
 import urllib.parse
 import os
+from ocr_utils import enrich_with_pubchem
 
    # ====================CHEMICAL INFO DIALOG BOX=====================#
 class ChemicalEntryDialog(QDialog):
@@ -15,7 +16,7 @@ class ChemicalEntryDialog(QDialog):
         layout = QFormLayout()
 
         # === THUMBNAIL PREVIEW ===
-        # Optional: show thumbnail if image path is provided
+        # Show thumbnail if image path is provided
         if image_path and os.path.exists(image_path):
             try:
                 pixmap = QPixmap(image_path)
@@ -39,9 +40,13 @@ class ChemicalEntryDialog(QDialog):
         self.quantity_edit = QLineEdit(str(info.get("quantity", 1)) if info else "1")
         self.manufacturer_edit = QLineEdit(info.get("manufacturer", "") if info else "")
         self.catalog_number_edit = QLineEdit(info.get("catalog_number", "") if info else "")
+        self.fetch_pubchem_btn = QPushButton("Fetch from PubChem")
+        self.fetch_pubchem_btn.clicked.connect(self.fetch_pubchem_data)
+        self.safety_info_url_edit = QLineEdit(info.get("safety_info_url", "") if info else "")
 
         layout.addRow("Name:", self.name_edit)
         layout.addRow("CAS Number:", self.cas_edit)
+        layout.addWidget(self.fetch_pubchem_btn)
         layout.addRow("Formula:", self.formula_edit)
         layout.addRow("Common Name:", self.common_name_edit)
         layout.addRow("IUPAC Name:", self.iupac_name_edit)
@@ -49,6 +54,7 @@ class ChemicalEntryDialog(QDialog):
         layout.addRow("Quantity:", self.quantity_edit)
         layout.addRow("Manufacturer:", self.manufacturer_edit)
         layout.addRow("Catalog Number:", self.catalog_number_edit)
+        layout.addRow("Safety Info URL:", self.safety_info_url_edit)
 
         # === SAFETY INFO LINK (OPTIONAL) ===
         if info and info.get("safety_info_url"):
@@ -70,6 +76,44 @@ class ChemicalEntryDialog(QDialog):
         layout.addWidget(self.buttons)
 
         self.setLayout(layout)
+
+    def fetch_pubchem_data(self):
+            cas = self.cas_edit.text().strip()
+       #     print(cas)
+            if not cas:
+                QMessageBox.warning(self, "No CAS Number", "Please enter a CAS number to fetch data.")
+                return
+
+            try:
+                # Assume enrich_pubchem is your function returning a dict of chemical info
+                data = enrich_with_pubchem({"cas_number": cas})
+                if not data or not any(data.get(k) for k in ("iupac_name", "common_name", "formula")):
+                    # Nothing useful found – fallback to Google
+                    QMessageBox.information(
+                        self,
+                        "No PubChem Data",
+                        f"No PubChem data found for CAS {cas}. A Google search will now open."
+                    )
+                    query = f"{cas}"
+                    url = f"https://www.google.com/search?q={urllib.parse.quote(query)}"
+                    webbrowser.open(url)
+                    return
+
+                # Update fields with returned data
+                self.name_edit.setText(data.get("name", ""))
+                self.formula_edit.setText(data.get("formula", ""))
+                self.common_name_edit.setText(data.get("common_name", ""))
+                self.iupac_name_edit.setText(data.get("iupac_name", ""))
+                self.safety_info_url_edit.setText(data.get("safety_info_url", ""))
+               # self.manufacturer_edit.setText(data.get("manufacturer", ""))
+               # self.catalog_number_edit.setText(data.get("catalog_number", ""))
+               # self.product_url_edit.setText(data.get("product_url", ""))
+
+                # Optionally show a success message
+                QMessageBox.information(self, "Success", "Data fetched from PubChem and fields updated.")
+
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Error fetching data: {e}")
 
     def open_google_search(self):
         manufacturer = self.manufacturer_edit.text().strip()
@@ -93,6 +137,6 @@ class ChemicalEntryDialog(QDialog):
             "quantity": int(self.quantity_edit.text().strip() or "1"),
             "manufacturer": self.manufacturer_edit.text().strip(),
             "catalog_number": self.catalog_number_edit.text().strip(),
-            "safety_info_url": getattr(self, "safety_info_url", None),
+            "safety_info_url": self.safety_info_url_edit.text().strip(),
             "product_url": getattr(self, "product_url", None)
         }

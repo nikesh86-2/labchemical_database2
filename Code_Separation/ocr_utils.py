@@ -44,8 +44,9 @@ use pubchempy to extract data from available cas number
         compounds = pcp.get_compounds(cas, 'name')
         if compounds:
             comp = compounds[0] # take first entry from cas list
-
+            data["name"] = comp.iupac_name or (comp.synonyms[0] if comp.synonyms else "")
             data["iupac_name"] = comp.iupac_name
+          #  print("IUPAC Name:", comp.iupac_name)
             data["common_name"] = comp.synonyms[0] if comp.synonyms else None
             data["formula"] = comp.molecular_formula
             data["safety_info_url"] = f"https://pubchem.ncbi.nlm.nih.gov/compound/{comp.cid}"

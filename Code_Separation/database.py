@@ -2,12 +2,12 @@ import sqlite3
 from config import DB_FILE
 
 #====DB creation ====#
-def create_database():
+def create_database(db_uri, readonly) :
     """
     Create a SQLite database and a 'chemicals' table if it doesn't already exist.
     Stores the chemical database
     """
-    conn = sqlite3.connect(DB_FILE)
+    conn = sqlite3.connect(db_uri, uri=True)
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS Chemicals (

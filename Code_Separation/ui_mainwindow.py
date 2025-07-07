@@ -13,8 +13,9 @@ import urllib.parse
 
 # ========== MAIN APPLICATION WINDOW ==========
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self,db_uri):
         super().__init__()
+        self.db_uri = db_uri
         self.setWindowTitle("Chemical Inventory")
         self.resize(1000, 600)
 
@@ -54,6 +55,8 @@ class MainWindow(QMainWindow):
         self.use_bottle_button = QPushButton("Use Bottle")
         self.use_bottle_button.clicked.connect(self.use_bottle)
 
+        self.exit_button = QPushButton("Exit")
+        self.exit_button.clicked.connect(self.close)
 
         # Button layout
         button_layout = QHBoxLayout()
@@ -63,6 +66,7 @@ class MainWindow(QMainWindow):
         button_layout.addWidget(self.delete_button)
         button_layout.addWidget(self.refresh_button)
         button_layout.addWidget(self.use_bottle_button)
+        button_layout.addWidget(self.exit_button)
 
         layout = QVBoxLayout()
         layout.addLayout(search_layout)
@@ -78,7 +82,7 @@ class MainWindow(QMainWindow):
 
     def search_database(self):
             query_text = self.search_input.text().strip()
-            conn = sqlite3.connect(DB_FILE)
+            conn = sqlite3.connect(self.db_uri, uri=True)
             cursor = conn.cursor()
 
             if query_text:
@@ -120,7 +124,7 @@ class MainWindow(QMainWindow):
 
             new_quantity = current_quantity - 1 # reduce by 1
 
-            conn = sqlite3.connect(DB_FILE) # update the database
+            conn = sqlite3.connect(self.db_uri, uri=True) # update the database
             cursor = conn.cursor()
             cursor.execute("UPDATE Chemicals SET quantity = ? WHERE id = ?", (new_quantity, compound_id))
             conn.commit()
@@ -133,7 +137,7 @@ class MainWindow(QMainWindow):
 # thinking about adding email facility
 
     def load_data(self):
-        conn = sqlite3.connect(DB_FILE)
+        conn = sqlite3.connect(self.db_uri, uri=True)
         cursor = conn.cursor()
         cursor.execute("""
             SELECT id, name, cas_number, formula, common_name, iupac_name,
@@ -205,7 +209,7 @@ class MainWindow(QMainWindow):
                             return
 
                     # Update database
-                    conn = sqlite3.connect(DB_FILE)
+                    conn = sqlite3.connect(self.db_uri, uri=True)
                     cursor = conn.cursor()
                     cursor.execute(f"UPDATE Chemicals SET {field} = ? WHERE id = ?", (new_value, row_id))
                     conn.commit()
@@ -308,7 +312,7 @@ class MainWindow(QMainWindow):
 
         confirm = QMessageBox.question(self, "Confirm Delete", f"Delete compound ID {compound_id}?", QMessageBox.Yes | QMessageBox.No)
         if confirm == QMessageBox.Yes:
-            conn = sqlite3.connect(DB_FILE)
+            conn = sqlite3.connect(self.db_uri, uri=True)
             cursor = conn.cursor()
             cursor.execute("DELETE FROM Chemicals WHERE id = ?", (compound_id,))
             conn.commit()
@@ -350,7 +354,7 @@ class MainWindow(QMainWindow):
 
     # ==================STORE EDITTED ENTRY FOR CHEMICALS=================#
     def update_database_row(self, row_id, info):
-        conn = sqlite3.connect(DB_FILE)
+        conn = sqlite3.connect(self.db_uri, uri=True)
         cursor = conn.cursor()
         cursor.execute('''
             UPDATE Chemicals SET
