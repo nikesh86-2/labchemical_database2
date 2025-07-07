@@ -3,8 +3,8 @@ from PyQt5.QtGui import QFont
 #====STYLE SHEET====#
 
 # JetBrains Mono font setup
-jetbrains_font = QFont("JetBrainsMono Nerd Font Mono", 8)
-if jetbrains_font.family() != "JetBrainsMono Nerd Font Mono":
+jetbrains_font = QFont("Adobe Helvetica", 8)
+if jetbrains_font.family() != "Adobe Helvetica":
     jetbrains_font = QFont("Monospace", 8)
 
 # Dark theme stylesheet
@@ -12,8 +12,7 @@ dark_stylesheet = """
 QWidget {
     background-color: #2b2b2b;
     color: #a9b7c6;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11pt;
+
 }
 QPushButton {
     background-color: #3c3f41;
@@ -38,8 +37,7 @@ QTableWidget {
     background-color: #313335;
     gridline-color: #555555;
     color: #a9b7c6;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11pt;
+
 }
 QHeaderView::section {
     background-color: #3c3f41;

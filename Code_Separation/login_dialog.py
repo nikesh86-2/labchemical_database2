@@ -1,7 +1,7 @@
 import os
 import json
 import hashlib
-from PyQt5.QtWidgets import QDialog, QLineEdit, QLabel, QPushButton, QVBoxLayout, QMessageBox
+from PyQt5.QtWidgets import QDialog, QInputDialog, QLineEdit, QLabel, QPushButton, QVBoxLayout, QMessageBox
 
 PASSWORD_FILE = "login_credentials.json"
 
