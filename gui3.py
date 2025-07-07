@@ -7,9 +7,9 @@ import re
 from PIL import Image, ImageEnhance
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QFileDialog, QVBoxLayout,
                              QPushButton, QWidget, QTableWidget, QTableWidgetItem,
-                             QHBoxLayout, QLineEdit, QDialog, QFormLayout, QDialogButtonBox, QMessageBox)
+                             QHBoxLayout, QLabel, QLineEdit, QDialog, QFormLayout, QDialogButtonBox, QMessageBox)
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QPixmap
 import easyocr
 import pubchempy as pcp
 import numpy as np
@@ -178,6 +178,7 @@ use pubchempy to extract data from available cas number
             data["common_name"] = comp.synonyms[0] if comp.synonyms else None
             data["formula"] = comp.molecular_formula
             data["safety_info_url"] = f"https://pubchem.ncbi.nlm.nih.gov/compound/{comp.cid}"
+            #print(f"CID: {comp.cid}")
     except Exception as e:
         print(f"PubChem lookup failed for CAS {cas}: {e}")
     return data
@@ -214,11 +215,208 @@ def parse_chemical_info(text):
     #     data["manufacturer"] = manufacturer_match.group(1).strip()
     #
     # Catalog Number
-    catalog_match = re.search(r"Catalog\s*(?:No\.|Number)[:\s]*([\w-]+)", text, re.IGNORECASE)
+    catalog_match = re.search(
+        r"\b(?:Catalog|Catalogue|Cat(?:\.|alog(?:ue)?)?)?\s*(?:No\.?|Number)?\s*[:#]?\s*([A-Z]?\d{4,}[A-Z]?)\b",
+        text, re.IGNORECASE)
     if catalog_match:
         data["catalog_number"] = catalog_match.group(1).strip()
+        # Only open URL if CAS number is not already found
+    if not data.get("cas_number"):
+        url = f"https://www.google.com/search?q={urllib.parse.quote(str(data['catalog_number']))}"
+        webbrowser.open(url)
 
     return enrich_with_pubchem(data)
+
+   # ====================CHEMICAL INFO DIALOG BOX=====================#
+class ChemicalEntryDialog(QDialog):
+    def __init__(self, info=None, image_path=None):
+        super().__init__()
+        self.setFont(jetbrains_font)
+        self.setWindowTitle("Enter Chemical Information")
+        layout = QFormLayout()
+
+        # === THUMBNAIL PREVIEW ===
+        # Optional: show thumbnail if image path is provided
+        if image_path and os.path.exists(image_path):
+            try:
+                pixmap = QPixmap(image_path)
+                if not pixmap.isNull():
+                    pixmap = pixmap.scaled(500, 500, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                    image_label = QLabel()
+                    image_label.setPixmap(pixmap)
+                    image_label.setAlignment(Qt.AlignCenter)
+                    layout.addRow("Image Preview:", image_label)
+                else:
+                    print(f"Warning: Failed to load pixmap from {image_path}")
+            except Exception as e:
+                print(f"Error loading thumbnail: {e}")
+
+        self.name_edit = QLineEdit(info.get("name", "") if info else "")
+        self.cas_edit = QLineEdit(info.get("cas_number", "") if info else "")
+        self.formula_edit = QLineEdit(info.get("formula", "") if info else "")
+        self.common_name_edit = QLineEdit(info.get("common_name", "") if info else "")
+        self.iupac_name_edit = QLineEdit(info.get("iupac_name", "") if info else "")
+        self.location_edit = QLineEdit(info.get("location", "") if info else "")
+        self.quantity_edit = QLineEdit(str(info.get("quantity", 1)) if info else "1")
+        self.manufacturer_edit = QLineEdit(info.get("manufacturer", "") if info else "")
+        self.catalog_number_edit = QLineEdit(info.get("catalog_number", "") if info else "")
+
+        layout.addRow("Name:", self.name_edit)
+        layout.addRow("CAS Number:", self.cas_edit)
+        layout.addRow("Formula:", self.formula_edit)
+        layout.addRow("Common Name:", self.common_name_edit)
+        layout.addRow("IUPAC Name:", self.iupac_name_edit)
+        layout.addRow("Location:", self.location_edit)
+        layout.addRow("Quantity:", self.quantity_edit)
+        layout.addRow("Manufacturer:", self.manufacturer_edit)
+        layout.addRow("Catalog Number:", self.catalog_number_edit)
+
+        # === SAFETY INFO LINK (OPTIONAL) ===
+        if info and info.get("safety_info_url"):
+            self.safety_info_url = info["safety_info_url"]
+            link_label = QLabel(f'<a href="{self.safety_info_url}">View Safety Info</a>')
+            link_label.setOpenExternalLinks(True)
+            layout.addRow("Safety Info:", link_label)
+        else:
+            self.safety_info_url = None
+
+        # GOOGLE SEARCH BUTTON
+        self.search_button = QPushButton("Search Online")
+        self.search_button.clicked.connect(self.open_google_search)
+        layout.addWidget(self.search_button)
+
+        self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttons.accepted.connect(self.accept)
+        self.buttons.rejected.connect(self.reject)
+        layout.addWidget(self.buttons)
+
+        self.setLayout(layout)
+
+    def open_google_search(self):
+        manufacturer = self.manufacturer_edit.text().strip()
+        catalog_number = self.catalog_number_edit.text().strip()
+        print(f"Manufacturer: {manufacturer}, Catalog Number: {catalog_number}")  # Debug
+        if manufacturer and catalog_number:
+            query = f"{manufacturer} {catalog_number}"
+            url = f"https://www.google.com/search?q={urllib.parse.quote(query)}"
+            webbrowser.open(url)
+        else:
+            QMessageBox.warning(self, "Missing Info", "Please enter both manufacturer and catalog number.")
+
+    def get_data(self):
+        return {
+            "name": self.name_edit.text().strip(),
+            "cas_number": self.cas_edit.text().strip(),
+            "formula": self.formula_edit.text().strip(),
+            "common_name": self.common_name_edit.text().strip(),
+            "iupac_name": self.iupac_name_edit.text().strip(),
+            "location": self.location_edit.text().strip(),
+            "quantity": int(self.quantity_edit.text().strip() or "1"),
+            "manufacturer": self.manufacturer_edit.text().strip(),
+            "catalog_number": self.catalog_number_edit.text().strip(),
+            "safety_info_url": getattr(self, "safety_info_url", None),
+            "product_url": getattr(self, "product_url", None)
+        }
+
+def normalize(s):
+    return s.strip().lower() if s else None
+
+def save_to_database(info):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+
+    # Normalize incoming values
+    name = normalize(info.get("name"))
+    common_name = normalize(info.get("common_name"))
+    cas_number = normalize(info.get("cas_number"))
+    catalog_number = normalize(info.get("catalog_number"))
+
+    existing = None
+
+    # Priority 1: Match by CAS number
+    if cas_number:
+        cursor.execute('''
+            SELECT id, quantity FROM Chemicals
+            WHERE LOWER(cas_number) = ?
+        ''', (cas_number,))
+        existing = cursor.fetchone()
+
+    # Priority 2: Match by catalog number
+    if not existing and catalog_number:
+        cursor.execute('''
+            SELECT id, quantity FROM Chemicals
+            WHERE LOWER(catalog_number) = ?
+        ''', (catalog_number,))
+        existing = cursor.fetchone()
+
+    # Priority 3: Match name when common_name is empty
+    if not existing and name:
+        cursor.execute('''
+            SELECT id, quantity FROM Chemicals
+            WHERE LOWER(name) = ?
+            AND (common_name IS NULL OR TRIM(common_name) = '')
+        ''', (name,))
+        existing = cursor.fetchone()
+
+    # Priority 4: Match common_name when name is empty
+    if not existing and common_name:
+        cursor.execute('''
+            SELECT id, quantity FROM Chemicals
+            WHERE LOWER(common_name) = ?
+            AND (name IS NULL OR TRIM(name) = '')
+        ''', (common_name,))
+        existing = cursor.fetchone()
+
+    # Priority 5: common_name matches existing name, and their common_name is empty
+    if not existing and common_name:
+        cursor.execute('''
+            SELECT id, quantity FROM Chemicals
+            WHERE LOWER(name) = ?
+            AND (common_name IS NULL OR TRIM(common_name) = '')
+        ''', (common_name,))
+        existing = cursor.fetchone()
+
+    # Priority 6: name matches existing common_name, and their name is empty
+    if not existing and name:
+        cursor.execute('''
+            SELECT id, quantity FROM Chemicals
+            WHERE LOWER(common_name) = ?
+            AND (name IS NULL OR TRIM(name) = '')
+        ''', (name,))
+        existing = cursor.fetchone()
+
+    # Merge if match found
+    if existing:
+        existing_id, existing_qty = existing
+        new_qty = existing_qty + info.get("quantity", 1)
+        cursor.execute('''
+            UPDATE Chemicals
+            SET quantity = ?
+            WHERE id = ?
+        ''', (new_qty, existing_id))
+    else:
+        # Insert new row
+        cursor.execute('''
+            INSERT INTO Chemicals (
+                name, cas_number, formula, common_name, iupac_name, location, quantity,
+                safety_info_url, manufacturer, catalog_number, product_url
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            info.get("name"),
+            info.get("cas_number"),
+            info.get("formula"),
+            info.get("common_name"),
+            info.get("iupac_name"),
+            info.get("location"),
+            info.get("quantity", 1),
+            info.get("safety_info_url"),
+            info.get("manufacturer"),
+            info.get("catalog_number"),
+            info.get("product_url"),
+        ))
+
+    conn.commit()
+    conn.close()
 
 # ========== MAIN APPLICATION WINDOW ==========
 class MainWindow(QMainWindow):
@@ -233,12 +431,23 @@ class MainWindow(QMainWindow):
         self.table.setSelectionMode(QTableWidget.SingleSelection)
         self.table.itemChanged.connect(self.handle_cell_change)
 
+        #search function
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Search chemicals by name, CAS, catalog...")
+
+        self.search_button = QPushButton("Search")
+        self.search_button.clicked.connect(self.search_database)
+
+        search_layout = QHBoxLayout()
+        search_layout.addWidget(self.search_input)
+        search_layout.addWidget(self.search_button)
+
         # Buttons
         self.process_folder_btn = QPushButton("Process Image Folder")
         self.process_folder_btn.clicked.connect(self.process_image_folder)
 
-        self.search_button = QPushButton("Search Reagent Online")
-        self.search_button.clicked.connect(self.open_google_search_dialog)
+        self.online_search_button = QPushButton("Search Reagent Online")
+        self.online_search_button.clicked.connect(self.open_google_search_dialog)
 
         self.add_manual_button = QPushButton("Add Compound Manually")
         self.add_manual_button.clicked.connect(self.add_manual_entry)
@@ -256,13 +465,14 @@ class MainWindow(QMainWindow):
         # Button layout
         button_layout = QHBoxLayout()
         button_layout.addWidget(self.process_folder_btn)
-        button_layout.addWidget(self.search_button)
+        button_layout.addWidget(self.online_search_button)
         button_layout.addWidget(self.add_manual_button)
         button_layout.addWidget(self.delete_button)
         button_layout.addWidget(self.refresh_button)
         button_layout.addWidget(self.use_bottle_button)
 
         layout = QVBoxLayout()
+        layout.addLayout(search_layout)
         layout.addWidget(self.table)
         layout.addLayout(button_layout)
 
@@ -273,7 +483,32 @@ class MainWindow(QMainWindow):
         # Load data
         self.load_data()
 
-#snippet for reducing quantity.
+    def search_database(self):
+            query_text = self.search_input.text().strip()
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+
+            if query_text:
+                # Search by name, common_name, cas_number, catalog_number (case-insensitive)
+                cursor.execute('''
+                    SELECT * FROM Chemicals
+                    WHERE
+                        LOWER(name) LIKE ? OR
+                        LOWER(common_name) LIKE ? OR
+                        LOWER(cas_number) LIKE ? OR
+                        LOWER(catalog_number) LIKE ?
+                    ORDER BY name
+                ''', (f'%{query_text.lower()}%',) * 4)
+            else:
+                # If no search, just show all
+                cursor.execute('SELECT * FROM Chemicals ORDER BY name')
+
+            results = cursor.fetchall()
+            conn.close()
+
+            self.load_data_into_table(results)
+
+    #snippet for reducing quantity.
     def use_bottle(self):
 
             selected_items = self.table.selectedItems()
@@ -305,15 +540,21 @@ class MainWindow(QMainWindow):
 # thinking about adding email facility
 
     def load_data(self):
-#reload data in visible spreadsheet
-        self.table.blockSignals(True) # prevent recursive triggers when inline editing
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
-        cursor.execute("SELECT id, name, cas_number, formula, common_name, iupac_name, location, quantity, manufacturer, catalog_number FROM Chemicals")
+        cursor.execute("""
+            SELECT id, name, cas_number, formula, common_name, iupac_name,
+                   location, quantity, safety_info_url, manufacturer, catalog_number
+            FROM Chemicals
+        """)
         rows = cursor.fetchall()
         conn.close()
+        self.load_data_into_table(rows)
 
-        headers = ["ID", "Name", "CAS Number", "Formula", "Common Name", "IUPAC Name", "Location", "Quantity", "Manufacturer", "Catalog Number"]
+    def load_data_into_table(self, rows):
+        headers = ["ID", "Name", "CAS Number", "Formula", "Common Name", "IUPAC Name", "Location", "Quantity",
+                   "Safety Info URL", "Manufacturer", "Catalog Number"]
+        self.table.blockSignals(True)
         self.table.clear()
         self.table.setRowCount(len(rows))
         self.table.setColumnCount(len(headers))
@@ -324,10 +565,35 @@ class MainWindow(QMainWindow):
                 item = QTableWidgetItem(str(value))
                 self.table.setItem(row_idx, col_idx, item)
                 if col_idx == 0:
-                    item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)  # ID is read-only
+                    item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
                 else:
                     item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable)
-        self.table.blockSignals(False) # prevent recursive triggers when inline editing
+        self.table.blockSignals(False)
+
+#     def load_data(self):
+# #reload data in visible spreadsheet
+#         self.table.blockSignals(True) # prevent recursive triggers when inline editing
+#         conn = sqlite3.connect(DB_FILE)
+#         cursor = conn.cursor()
+#         cursor.execute("SELECT id, name, cas_number, formula, common_name, iupac_name, location, quantity, safety_info_url, manufacturer, catalog_number FROM Chemicals")
+#         rows = cursor.fetchall()
+#         conn.close()
+#
+#         headers = ["ID", "Name", "CAS Number", "Formula", "Common Name", "IUPAC Name", "Location", "Quantity", "Safety Info URL", "Manufacturer", "Catalog Number"]
+#         self.table.clear()
+#         self.table.setRowCount(len(rows))
+#         self.table.setColumnCount(len(headers))
+#         self.table.setHorizontalHeaderLabels(headers)
+#
+#         for row_idx, row_data in enumerate(rows):
+#             for col_idx, value in enumerate(row_data):
+#                 item = QTableWidgetItem(str(value))
+#                 self.table.setItem(row_idx, col_idx, item)
+#                 if col_idx == 0:
+#                     item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)  # ID is read-only
+#                 else:
+#                     item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable)
+#         self.table.blockSignals(False) # prevent recursive triggers when inline editing
 
 #====INLINE CHEMICAL EDITING ====#
     def handle_cell_change(self, item):
@@ -394,7 +660,7 @@ class MainWindow(QMainWindow):
                 if not parsed_info.get("location"):
                     parsed_info["location"] = folder_name
 
-                dialog = ChemicalEntryDialog(parsed_info)
+                dialog = ChemicalEntryDialog(parsed_info, image_path=full_path)
                 if dialog.exec_() == QDialog.Accepted:
                     info = dialog.get_data()
                     save_to_database(info)
@@ -435,8 +701,8 @@ class MainWindow(QMainWindow):
                     "formula": "",
                     "common_name": "",
                     "iupac_name": "",
-                    "product_url": None,
-                    "safety_info_url": None
+                    "product_url": "",
+                    "safety_info_url": ""
                 }
 
                 chem_dialog = ChemicalEntryDialog(info)
@@ -550,172 +816,6 @@ class MainWindow(QMainWindow):
         conn.close()
    # ======================================#
 
-   # ====================CHEMICAL INFO DIALOG BOX=====================#
-class ChemicalEntryDialog(QDialog):
-    def __init__(self, info=None):
-        super().__init__()
-        self.setFont(jetbrains_font)
-        self.setWindowTitle("Enter Chemical Information")
-        layout = QFormLayout()
-
-        self.name_edit = QLineEdit(info.get("name", "") if info else "")
-        self.cas_edit = QLineEdit(info.get("cas_number", "") if info else "")
-        self.formula_edit = QLineEdit(info.get("formula", "") if info else "")
-        self.common_name_edit = QLineEdit(info.get("common_name", "") if info else "")
-        self.iupac_name_edit = QLineEdit(info.get("iupac_name", "") if info else "")
-        self.location_edit = QLineEdit(info.get("location", "") if info else "")
-        self.quantity_edit = QLineEdit(str(info.get("quantity", 1)) if info else "1")
-        self.manufacturer_edit = QLineEdit(info.get("manufacturer", "") if info else "")
-        self.catalog_number_edit = QLineEdit(info.get("catalog_number", "") if info else "")
-
-        layout.addRow("Name:", self.name_edit)
-        layout.addRow("CAS Number:", self.cas_edit)
-        layout.addRow("Formula:", self.formula_edit)
-        layout.addRow("Common Name:", self.common_name_edit)
-        layout.addRow("IUPAC Name:", self.iupac_name_edit)
-        layout.addRow("Location:", self.location_edit)
-        layout.addRow("Quantity:", self.quantity_edit)
-        layout.addRow("Manufacturer:", self.manufacturer_edit)
-        layout.addRow("Catalog Number:", self.catalog_number_edit)
-
-
-        # GOOGLE SEARCH BUTTON
-        self.search_button = QPushButton("Search Online")
-        self.search_button.clicked.connect(self.open_google_search)
-        layout.addWidget(self.search_button)
-
-        self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        self.buttons.accepted.connect(self.accept)
-        self.buttons.rejected.connect(self.reject)
-        layout.addWidget(self.buttons)
-
-        self.setLayout(layout)
-
-    def open_google_search(self):
-        manufacturer = self.manufacturer_edit.text().strip()
-        catalog_number = self.catalog_number_edit.text().strip()
-        print(f"Manufacturer: {manufacturer}, Catalog Number: {catalog_number}")  # Debug
-        if manufacturer and catalog_number:
-            query = f"{manufacturer} {catalog_number}"
-            url = f"https://www.google.com/search?q={urllib.parse.quote(query)}"
-            webbrowser.open(url)
-        else:
-            QMessageBox.warning(self, "Missing Info", "Please enter both manufacturer and catalog number.")
-
-    def get_data(self):
-        return {
-            "name": self.name_edit.text().strip(),
-            "cas_number": self.cas_edit.text().strip(),
-            "formula": self.formula_edit.text().strip(),
-            "common_name": self.common_name_edit.text().strip(),
-            "iupac_name": self.iupac_name_edit.text().strip(),
-            "location": self.location_edit.text().strip(),
-            "quantity": int(self.quantity_edit.text().strip() or "1"),
-            "manufacturer": self.manufacturer_edit.text().strip(),
-            "catalog_number": self.catalog_number_edit.text().strip(),
-            "product_url": None,
-            "safety_info_url": None
-        }
-
-def normalize(s):
-    return s.strip().lower() if s else None
-
-def save_to_database(info):
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-
-    # Normalize incoming values
-    name = normalize(info.get("name"))
-    common_name = normalize(info.get("common_name"))
-    cas_number = normalize(info.get("cas_number"))
-    catalog_number = normalize(info.get("catalog_number"))
-
-    existing = None
-
-    # Priority 1: Match by CAS number
-    if cas_number:
-        cursor.execute('''
-            SELECT id, quantity FROM Chemicals
-            WHERE LOWER(cas_number) = ?
-        ''', (cas_number,))
-        existing = cursor.fetchone()
-
-    # Priority 2: Match by catalog number
-    if not existing and catalog_number:
-        cursor.execute('''
-            SELECT id, quantity FROM Chemicals
-            WHERE LOWER(catalog_number) = ?
-        ''', (catalog_number,))
-        existing = cursor.fetchone()
-
-    # Priority 3: Match name when common_name is empty
-    if not existing and name:
-        cursor.execute('''
-            SELECT id, quantity FROM Chemicals
-            WHERE LOWER(name) = ?
-            AND (common_name IS NULL OR TRIM(common_name) = '')
-        ''', (name,))
-        existing = cursor.fetchone()
-
-    # Priority 4: Match common_name when name is empty
-    if not existing and common_name:
-        cursor.execute('''
-            SELECT id, quantity FROM Chemicals
-            WHERE LOWER(common_name) = ?
-            AND (name IS NULL OR TRIM(name) = '')
-        ''', (common_name,))
-        existing = cursor.fetchone()
-
-    # Priority 5: common_name matches existing name, and their common_name is empty
-    if not existing and common_name:
-        cursor.execute('''
-            SELECT id, quantity FROM Chemicals
-            WHERE LOWER(name) = ?
-            AND (common_name IS NULL OR TRIM(common_name) = '')
-        ''', (common_name,))
-        existing = cursor.fetchone()
-
-    # Priority 6: name matches existing common_name, and their name is empty
-    if not existing and name:
-        cursor.execute('''
-            SELECT id, quantity FROM Chemicals
-            WHERE LOWER(common_name) = ?
-            AND (name IS NULL OR TRIM(name) = '')
-        ''', (name,))
-        existing = cursor.fetchone()
-
-    # Merge if match found
-    if existing:
-        existing_id, existing_qty = existing
-        new_qty = existing_qty + info.get("quantity", 1)
-        cursor.execute('''
-            UPDATE Chemicals
-            SET quantity = ?
-            WHERE id = ?
-        ''', (new_qty, existing_id))
-    else:
-        # Insert new row
-        cursor.execute('''
-            INSERT INTO Chemicals (
-                name, cas_number, formula, common_name, iupac_name, location, quantity,
-                safety_info_url, manufacturer, catalog_number, product_url
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            info.get("name"),
-            info.get("cas_number"),
-            info.get("formula"),
-            info.get("common_name"),
-            info.get("iupac_name"),
-            info.get("location"),
-            info.get("quantity", 1),
-            info.get("safety_info_url"),
-            info.get("manufacturer"),
-            info.get("catalog_number"),
-            info.get("product_url"),
-        ))
-
-    conn.commit()
-    conn.close()
 def process_image_file(image_path):
     print(f"Processing: {image_path}")
     text = extract_text_from_image(image_path)
@@ -727,7 +827,7 @@ def process_image_file(image_path):
         parsed_info["location"] = folder_name  # auto-fill location
 
     # Show dialog with editable fields, including location
-    dialog = ChemicalEntryDialog(parsed_info)
+    dialog = ChemicalEntryDialog(parsed_info, image_path=image_path)
     if dialog.exec_() == QDialog.Accepted:
         info = dialog.get_data()
         save_to_database(info)
