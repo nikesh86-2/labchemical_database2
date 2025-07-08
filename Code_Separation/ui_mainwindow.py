@@ -6,7 +6,8 @@ import sqlite3
 from database import save_to_database
 from ocr_utils import extract_text_from_image, parse_chemical_info
 from chemical_dialog import ChemicalEntryDialog
-from config import DB_FILE
+from stockmail import check_low_stock_and_alert
+#from config import DB_FILE
 import os
 import webbrowser
 import urllib.parse
@@ -134,6 +135,7 @@ class MainWindow(QMainWindow):
 
             if new_quantity == 0:
                 QMessageBox.critical(self, "Reorder Alert", "Quantity is now 0. Please reorder this chemical.")
+                check_low_stock_and_alert(self.db_uri, threshold=1)
 # thinking about adding email facility
 
     def load_data(self):
