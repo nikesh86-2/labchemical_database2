@@ -85,7 +85,7 @@ class ChemicalEntryDialog(QDialog):
                 return
 
             try:
-                # Assume enrich_pubchem is your function returning a dict of chemical info
+            
                 data = enrich_with_pubchem({"cas_number": cas})
                 if not data or not any(data.get(k) for k in ("iupac_name", "common_name", "formula")):
                     # Nothing useful found – fallback to Google
@@ -109,7 +109,7 @@ class ChemicalEntryDialog(QDialog):
                # self.catalog_number_edit.setText(data.get("catalog_number", ""))
                # self.product_url_edit.setText(data.get("product_url", ""))
 
-                # Optionally show a success message
+                # success message
                 QMessageBox.information(self, "Success", "Data fetched from PubChem and fields updated.")
 
             except Exception as e:
