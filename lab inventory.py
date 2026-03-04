@@ -8,7 +8,7 @@ import requests
 import time
 
 DB_PATH = "lab_inventory.db"
-CHEMSPIDER_API_KEY = "xduPDRiOrYasBMYJbmIEf4d9i90J2B3G2585r1tk"  # <-- Put your ChemSpider API key here
+CHEMSPIDER_API_KEY = "SECRET!!"  # <-- Put your ChemSpider API key here
 
 # ---------- DB Setup ----------
 
@@ -186,7 +186,7 @@ def process_folder_batch(base_folder):
             img_processed = preprocess_grayscale_contrast(image_file, location, alpha=2.0, beta=10)
             process_image(os.path.join(root, image_file), location)
 
-def preprocess_grayscale_contrast(image_path, alpha, beta):
+def preprocess_grayscale_contrast(image_path, alpha, beta): #necessary for decent char recognition
     """
     alpha: contrast control (1.0-3.0)
     beta: brightness control (0-100)
@@ -203,13 +203,6 @@ if __name__ == "__main__":
     create_database()
     base_folder = input("Enter path to folder containing location subfolders: ").strip()
     process_folder_batch(base_folder)
-
-
-
-
-
-
-
 
 def process_image(image_path):
     print(f"\nProcessing {os.path.basename(image_path)}...")
