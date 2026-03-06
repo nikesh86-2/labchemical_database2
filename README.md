@@ -14,6 +14,7 @@ Login screen with changable admin password
 Read‑only mode support via file locking
 
 📁 Project structure
+```
 .
 ├── config.py           # DB file name
 ├── dblock.py           # SQLite lock helper
@@ -26,6 +27,7 @@ Read‑only mode support via file locking
 ├── mail_config.py      # EMAIL_USER / EMAIL_PASS
 ├── main.py             # launcher
 └── README.md
+```
 
 🛠️ Requirements
 Python 3.10+
