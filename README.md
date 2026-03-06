@@ -16,6 +16,7 @@ Read‑only mode support via file locking
 📁 Project structure
 ```
 .
+CODE_SEPARATION FOLDER
 ├── config.py           # DB file name
 ├── dblock.py           # SQLite lock helper
 ├── database.py         # schema and save/merge logic
