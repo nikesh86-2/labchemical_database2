@@ -30,13 +30,21 @@ Read‑only mode support via file locking
 ```
 
 🛠️ Requirements
+
 Python 3.10+
+
 PyQt5
+
 Pillow
+
 easyocr
+
 pubchempy
+
 numpy
+
 (Optional) SMTP access to send emails
+
 A working Tesseract installation if OCR is needed (EasyOCR is not a wrapper for Tesseract but still may have system deps)
 You can install the Python dependencies with:
 
