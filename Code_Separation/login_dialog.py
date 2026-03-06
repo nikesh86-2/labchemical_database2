@@ -9,6 +9,13 @@ def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 def load_credentials():
+    # environment overrides are useful for CI/testing or to avoid storing
+    # sensitive data on disk.
+    env_user = os.environ.get("CHEM_USER")
+    env_pass = os.environ.get("CHEM_PASS")
+    if env_user and env_pass:
+        return {"username": env_user, "password": hash_password(env_pass)}
+
     if not os.path.exists(PASSWORD_FILE):
         return {"username": "admin", "password": hash_password("chem123")}
     with open(PASSWORD_FILE, "r") as f:

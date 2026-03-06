@@ -83,26 +83,25 @@ class MainWindow(QMainWindow):
 
     def search_database(self):
             query_text = self.search_input.text().strip()
-            conn = sqlite3.connect(self.db_uri, uri=True)
-            cursor = conn.cursor()
+            with sqlite3.connect(self.db_uri, uri=True) as conn:
+                cursor = conn.cursor()
 
-            if query_text:
-                # Search by name, common_name, cas_number, catalog_number (case-insensitive)
-                cursor.execute('''
-                    SELECT * FROM Chemicals
-                    WHERE
-                        LOWER(name) LIKE ? OR
-                        LOWER(common_name) LIKE ? OR
-                        LOWER(cas_number) LIKE ? OR
-                        LOWER(catalog_number) LIKE ?
-                    ORDER BY name
-                ''', (f'%{query_text.lower()}%',) * 4)
-            else:
-                # If no search, just show all
-                cursor.execute('SELECT * FROM Chemicals ORDER BY name')
+                if query_text:
+                    # Search by name, common_name, cas_number, catalog_number (case-insensitive)
+                    cursor.execute('''
+                        SELECT * FROM Chemicals
+                        WHERE
+                            LOWER(name) LIKE ? OR
+                            LOWER(common_name) LIKE ? OR
+                            LOWER(cas_number) LIKE ? OR
+                            LOWER(catalog_number) LIKE ?
+                        ORDER BY name
+                    ''', (f'%{query_text.lower()}%',) * 4)
+                else:
+                    # If no search, just show all
+                    cursor.execute('SELECT * FROM Chemicals ORDER BY name')
 
-            results = cursor.fetchall()
-            conn.close()
+                results = cursor.fetchall()
 
             self.load_data_into_table(results)
 
@@ -125,11 +124,9 @@ class MainWindow(QMainWindow):
 
             new_quantity = current_quantity - 1 # reduce by 1
 
-            conn = sqlite3.connect(self.db_uri, uri=True) # update the database
-            cursor = conn.cursor()
-            cursor.execute("UPDATE Chemicals SET quantity = ? WHERE id = ?", (new_quantity, compound_id))
-            conn.commit()
-            conn.close()
+            with sqlite3.connect(self.db_uri, uri=True) as conn: # update the database
+                cursor = conn.cursor()
+                cursor.execute("UPDATE Chemicals SET quantity = ? WHERE id = ?", (new_quantity, compound_id))
 
             self.load_data()
 
@@ -139,15 +136,14 @@ class MainWindow(QMainWindow):
 # thinking about adding email facility
 
     def load_data(self):
-        conn = sqlite3.connect(self.db_uri, uri=True)
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT id, name, cas_number, formula, common_name, iupac_name,
-                   location, quantity, safety_info_url, manufacturer, catalog_number
-            FROM Chemicals
-        """)
-        rows = cursor.fetchall()
-        conn.close()
+        with sqlite3.connect(self.db_uri, uri=True) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, name, cas_number, formula, common_name, iupac_name,
+                       location, quantity, safety_info_url, manufacturer, catalog_number
+                FROM Chemicals
+            """)
+            rows = cursor.fetchall()
         self.load_data_into_table(rows)
 
     def load_data_into_table(self, rows):
@@ -211,11 +207,9 @@ class MainWindow(QMainWindow):
                             return
 
                     # Update database
-                    conn = sqlite3.connect(self.db_uri, uri=True)
-                    cursor = conn.cursor()
-                    cursor.execute(f"UPDATE Chemicals SET {field} = ? WHERE id = ?", (new_value, row_id))
-                    conn.commit()
-                    conn.close()
+                    with sqlite3.connect(self.db_uri, uri=True) as conn:
+                        cursor = conn.cursor()
+                        cursor.execute(f"UPDATE Chemicals SET {field} = ? WHERE id = ?", (new_value, row_id))
 #======================================#
 
 #========FOLDER SELECTION============#
@@ -228,7 +222,7 @@ class MainWindow(QMainWindow):
             if file.lower().endswith(supported_exts):
                 full_path = os.path.join(folder, file)
                 text = extract_text_from_image(full_path)
-                parsed_info = parse_chemical_info(text)
+                parsed_info = parse_chemical_info(text)  # no browser side‑effect by default
 
                 folder_name = os.path.basename(folder)
                 if not parsed_info.get("location"):
@@ -314,11 +308,9 @@ class MainWindow(QMainWindow):
 
         confirm = QMessageBox.question(self, "Confirm Delete", f"Delete compound ID {compound_id}?", QMessageBox.Yes | QMessageBox.No)
         if confirm == QMessageBox.Yes:
-            conn = sqlite3.connect(self.db_uri, uri=True)
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM Chemicals WHERE id = ?", (compound_id,))
-            conn.commit()
-            conn.close()
+            with sqlite3.connect(self.db_uri, uri=True) as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM Chemicals WHERE id = ?", (compound_id,))
             self.load_data()
             # ======================================#
 
@@ -356,35 +348,33 @@ class MainWindow(QMainWindow):
 
     # ==================STORE EDITTED ENTRY FOR CHEMICALS=================#
     def update_database_row(self, row_id, info):
-        conn = sqlite3.connect(self.db_uri, uri=True)
-        cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE Chemicals SET
-                name = ?,
-                cas_number = ?,
-                formula = ?,
-                common_name = ?,
-                iupac_name = ?,
-                location = ?,
-                quantity = ?,
-                safety_info_url = ?,
-                manufacturer = ?,
-                catalog_number = ?,
-                product_url = ?
-            WHERE id = ?
-        ''', (
-            info.get("name"),
-            info.get("cas_number"),
-            info.get("formula"),
-            info.get("common_name"),
-            info.get("iupac_name"),
-            info.get("location"),
-            info.get("quantity", 1),
-            info.get("safety_info_url"),
-            info.get("manufacturer"),
-            info.get("catalog_number"),
-            info.get("product_url"),
-            row_id
-        ))
-        conn.commit()
-        conn.close()
+        with sqlite3.connect(self.db_uri, uri=True) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE Chemicals SET
+                    name = ?,
+                    cas_number = ?,
+                    formula = ?,
+                    common_name = ?,
+                    iupac_name = ?,
+                    location = ?,
+                    quantity = ?,
+                    safety_info_url = ?,
+                    manufacturer = ?,
+                    catalog_number = ?,
+                    product_url = ?
+                WHERE id = ?
+            ''', (
+                info.get("name"),
+                info.get("cas_number"),
+                info.get("formula"),
+                info.get("common_name"),
+                info.get("iupac_name"),
+                info.get("location"),
+                info.get("quantity", 1),
+                info.get("safety_info_url"),
+                info.get("manufacturer"),
+                info.get("catalog_number"),
+                info.get("product_url"),
+                row_id
+            ))

@@ -2,7 +2,12 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import sqlite3
+import os
 from mail_config import EMAIL_USER, EMAIL_PASS
+
+# allow credentials via environment variables as a fallback
+EMAIL_USER = EMAIL_USER or os.environ.get("EMAIL_USER")
+EMAIL_PASS = EMAIL_PASS or os.environ.get("EMAIL_PASS")
 
 
 def send_grouped_email_alert(recipient_email, low_stock_items, threshold, sender_email, sender_password, smtp_server,
@@ -39,11 +44,10 @@ def check_low_stock_and_alert(db_uri, threshold=0):
     low_stock_items = []
 
     try:
-        conn = sqlite3.connect(db_uri, uri=True)
-        cursor = conn.cursor()
-        cursor.execute("SELECT name, quantity FROM chemicals")
-        rows = cursor.fetchall()
-        conn.close()
+        with sqlite3.connect(db_uri, uri=True) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT name, quantity FROM chemicals")
+            rows = cursor.fetchall()
 
         for name, quantity in rows:
             if quantity <= threshold:
